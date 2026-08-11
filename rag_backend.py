@@ -59,52 +59,56 @@ def query_rag(user_query: str, chat_history: list = None, profile: str = "Client
         chat_history = []
         
     vectorstore = initialize_vectorstore()
+    
+    # 1. Verificação semântica inicial para checar a audiência do documento principal correspondente
+    initial_docs = vectorstore.similarity_search(user_query, k=2)
+    top_audience = initial_docs[0].metadata.get("audience", "Geral") if initial_docs else "Geral"
+    sources = set(doc.metadata.get("source", "Desconhecido") for doc in initial_docs)
+
+    # Bloqueio imediato por perfil se o documento principal for restrito
+    if profile == "Cliente":
+        if top_audience == "Funcionário":
+            return {
+                "resposta": "Você precisa ser um funcionário para receber essa informação.",
+                "fontes": list(sources),
+                "docs_detalhes": initial_docs
+            }
+        elif top_audience == "Fornecedor":
+            return {
+                "resposta": "Você precisa ser um fornecedor para receber essa informação.",
+                "fontes": list(sources),
+                "docs_detalhes": initial_docs
+            }
+    elif profile == "Fornecedor":
+        if top_audience == "Funcionário":
+            return {
+                "resposta": "Você precisa ser um funcionário para receber essa informação.",
+                "fontes": list(sources),
+                "docs_detalhes": initial_docs
+            }
+
+    # 2. Configurar o retriever com filtro de metadados adequado ao perfil
+    search_filter = None
+    if profile == "Cliente":
+        search_filter = {"audience": "Geral"}
+    elif profile == "Fornecedor":
+        search_filter = {"audience": {"$in": ["Geral", "Fornecedor"]}}
+
     retriever = vectorstore.as_retriever(
         search_type="mmr",
-        search_kwargs={"k": 4, "fetch_k": 10}
+        search_kwargs={
+            "k": 4,
+            "fetch_k": 10,
+            **({"filter": search_filter} if search_filter else {})
+        }
     )
     
     relevant_docs = retriever.invoke(user_query)
     sources = set(doc.metadata.get("source", "Desconhecido") for doc in relevant_docs)
 
-    # Filtrar documentos com base nas permissões do perfil
-    allowed_docs = []
-    has_restricted_access = False
-    restricted_type = "funcionário"
-
-    for doc in relevant_docs:
-        audience = doc.metadata.get("audience", "Geral")
-        if profile == "Cliente":
-            if audience == "Funcionário":
-                has_restricted_access = True
-                restricted_type = "funcionário"
-                continue
-            elif audience == "Fornecedor":
-                has_restricted_access = True
-                restricted_type = "fornecedor"
-                continue
-        elif profile == "Fornecedor":
-            if audience == "Funcionário":
-                has_restricted_access = True
-                restricted_type = "funcionário"
-                continue
-        allowed_docs.append(doc)
-
-    # Se a busca retornou exclusivamente documentos restritos e o usuário não tem permissão
-    if not allowed_docs and has_restricted_access:
-        return {
-            "resposta": f"Você precisa ser um {restricted_type} para receber essa informação.",
-            "fontes": list(sources),
-            "docs_detalhes": relevant_docs
-        }
-
-    # Se não encontrou documentos permitidos relevantes
-    if not allowed_docs:
-        allowed_docs = relevant_docs # fallback para evitar vazio
-
     # Format context with audience metadata indication
     formatted_chunks = []
-    for doc in allowed_docs:
+    for doc in relevant_docs:
         source = doc.metadata.get("source", "Desconhecido")
         audience = doc.metadata.get("audience", "Geral")
         chunk_str = f"[Documento: {source} | Público-Alvo: {audience}]\n{doc.page_content}"
