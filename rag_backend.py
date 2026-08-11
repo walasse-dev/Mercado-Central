@@ -57,8 +57,9 @@ def query_rag(user_query: str, chat_history: list = None, profile: str = "Client
     
     sources = set(doc.metadata.get("source", "Desconhecido") for doc in relevant_docs)
     
-    system_prompt = f"""Você é o assistente virtual oficial do Mercado Central 24h.
-Responda à pergunta do usuário ({profile}) com base estritamente nos documentos institucionais fornecidos abaixo.
+    system_prompt = f"""Você é o agente virtual oficial do Mercado Central 24h.
+Responda diretamente e profissionalmente à pergunta do usuário ({profile}) com base estritamente nos documentos institucionais fornecidos abaixo.
+Nunca utilize placeholders genéricos como [Nome do Atendente] nem solicite CPF ou número de cupom fiscal, a menos que estritamente necessário pelo contexto da pergunta.
 Se a informação não estiver nos documentos, informe educadamente que não encontrou essa diretriz nos manuais oficiais.
 Cite regras, prazos e seções específicas sempre que aplicável.
 
