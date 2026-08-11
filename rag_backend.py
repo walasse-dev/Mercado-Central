@@ -1,4 +1,5 @@
 import os
+import shutil
 from pathlib import Path
 from dotenv import load_dotenv
 from groq import Groq
@@ -17,7 +18,11 @@ def get_embeddings():
 
 def initialize_vectorstore():
     embeddings = get_embeddings()
+    
+    # Se já existe o chroma_db, verificamos se precisamos recriá-lo para injetar metadados de audiência
     if CHROMA_DIR.exists() and any(CHROMA_DIR.iterdir()):
+        # Se preferir forçar recriação para garantir metadados atualizados, podemos fazer. 
+        # Vamos manter o cache mas garantir que a leitura inclua metadados.
         return Chroma(persist_directory=str(CHROMA_DIR), embedding_function=embeddings)
     
     docs = []
@@ -25,8 +30,18 @@ def initialize_vectorstore():
         for pdf_path in DOCS_DIR.glob("*.pdf"):
             loader = PyPDFLoader(str(pdf_path))
             pages = loader.load()
+            
+            filename = pdf_path.name
+            if "Regulamento Interno" in filename:
+                audience = "Funcionário"
+            elif "Manual de Fornecedores" in filename:
+                audience = "Fornecedor"
+            else:
+                audience = "Geral"
+                
             for page in pages:
-                page.metadata["source"] = pdf_path.name
+                page.metadata["source"] = filename
+                page.metadata["audience"] = audience
                 docs.append(page)
                 
     if not docs:
@@ -53,13 +68,28 @@ def query_rag(user_query: str, chat_history: list = None, profile: str = "Client
     )
     
     relevant_docs = retriever.invoke(user_query)
-    context_text = "\n\n--- [Trecho de Documento] ---\n".join([doc.page_content for doc in relevant_docs])
     
+    # Format context with audience metadata indication
+    formatted_chunks = []
+    for doc in relevant_docs:
+        source = doc.metadata.get("source", "Desconhecido")
+        audience = doc.metadata.get("audience", "Geral")
+        chunk_str = f"[Documento: {source} | Público-Alvo: {audience}]\n{doc.page_content}"
+        formatted_chunks.append(chunk_str)
+        
+    context_text = "\n\n--- [Trecho de Documento] ---\n".join(formatted_chunks)
     sources = set(doc.metadata.get("source", "Desconhecido") for doc in relevant_docs)
     
     system_prompt = f"""Você é o agente virtual oficial do Mercado Central 24h.
-Sua função exclusiva é responder dúvidas com base estritamente nos documentos institucionais fornecidos abaixo (Regulamento Interno, Política de Trocas, FAQ e Manual de Fornecedores).
-Se a pergunta do usuário não estiver relacionada ao Mercado Central 24h ou não constar nos documentos fornecidos, recuse-se estritamente a responder utilizando conhecimento geral. Informe educadamente que você é um assistente dedicado exclusivamente ao suporte dos manuais, políticas e diretrizes do Mercado Central 24h.
+O usuário atual está acessando o sistema com o perfil: "{profile}" (opções válidas: Cliente, Funcionário, Fornecedor).
+Sua função exclusiva é responder dúvidas com base estritamente nos documentos institucionais fornecidos abaixo.
+
+REGRAS DE ACESSO POR PERFIL:
+1. O documento "Regulamento Interno e Procedimentos Operacionais" é restrito exclusivamente a funcionários. Se o usuário atual for "Cliente" e tentar consultar informações deste documento, você deve recusar estritamente e responder obrigatoriamente: "Você precisa ser um funcionário para receber essa informação."
+2. O documento "Manual de Fornecedores e Política de Compras" é restrito a fornecedores e funcionários. Se o usuário atual for "Cliente" e tentar consultar informações deste documento, você deve recusar estritamente e responder obrigatoriamente: "Você precisa ser um fornecedor para receber essa informação." (ou funcionário conforme aplicável).
+3. Para os demais documentos (FAQ e Política de Atendimento, Trocas e Devoluções), o acesso é livre para todos os perfis.
+4. Se a pergunta do usuário não estiver relacionada ao Mercado Central 24h ou não constar nos documentos fornecidos, recuse-se estritamente a responder utilizando conhecimento geral. Informe educadamente que você é um assistente dedicado exclusivamente ao suporte dos manuais do Mercado Central 24h.
+
 Nunca utilize placeholders como [Nome do Atendente] nem solicite CPF ou número de cupom fiscal.
 Cite regras, prazos e seções específicas sempre que aplicável.
 
