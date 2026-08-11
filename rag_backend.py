@@ -135,7 +135,11 @@ Contexto Recuperado:
             google_api_key=gemini_api_key
         )
         response = llm.invoke(lc_messages)
-        resposta = response.content
+        raw_content = response.content
+        if isinstance(raw_content, list):
+            resposta = "".join([item.get("text", "") for item in raw_content if isinstance(item, dict) and "text" in item])
+        else:
+            resposta = str(raw_content)
     except Exception as e:
         if "rate_limit" in str(e).lower() or "429" in str(e):
             resposta = "O sistema atingiu temporariamente o limite de requisições da API do Google Gemini. Por favor, aguarde alguns instantes e tente novamente."
