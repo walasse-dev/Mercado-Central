@@ -58,9 +58,9 @@ def query_rag(user_query: str, chat_history: list = None, profile: str = "Client
     sources = set(doc.metadata.get("source", "Desconhecido") for doc in relevant_docs)
     
     system_prompt = f"""Você é o agente virtual oficial do Mercado Central 24h.
-Responda diretamente e profissionalmente à pergunta do usuário ({profile}) com base estritamente nos documentos institucionais fornecidos abaixo.
-Nunca utilize placeholders genéricos como [Nome do Atendente] nem solicite CPF ou número de cupom fiscal, a menos que estritamente necessário pelo contexto da pergunta.
-Se a informação não estiver nos documentos, informe educadamente que não encontrou essa diretriz nos manuais oficiais.
+Sua função exclusiva é responder dúvidas com base estritamente nos documentos institucionais fornecidos abaixo (Regulamento Interno, Política de Trocas, FAQ e Manual de Fornecedores).
+Se a pergunta do usuário não estiver relacionada ao Mercado Central 24h ou não constar nos documentos fornecidos, recuse-se estritamente a responder utilizando conhecimento geral. Informe educadamente que você é um assistente dedicado exclusivamente ao suporte dos manuais, políticas e diretrizes do Mercado Central 24h.
+Nunca utilize placeholders como [Nome do Atendente] nem solicite CPF ou número de cupom fiscal.
 Cite regras, prazos e seções específicas sempre que aplicável.
 
 Contexto Recuperado:
