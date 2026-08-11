@@ -60,34 +60,38 @@ def query_rag(user_query: str, chat_history: list = None, profile: str = "Client
         
     vectorstore = initialize_vectorstore()
     
-    # 1. Verificação semântica inicial para checar a audiência do documento principal correspondente
-    initial_docs = vectorstore.similarity_search(user_query, k=2)
-    top_audience = initial_docs[0].metadata.get("audience", "Geral") if initial_docs else "Geral"
+    # 1. Verificação inicial sem filtro (top 3 documentos)
+    initial_docs = vectorstore.similarity_search(user_query, k=3)
     sources = set(doc.metadata.get("source", "Desconhecido") for doc in initial_docs)
 
-    # Bloqueio imediato por perfil se o documento principal for restrito
+    # Regras de bloqueio estrito por perfil
     if profile == "Cliente":
-        if top_audience == "Funcionário":
-            return {
-                "resposta": "Você precisa ser um funcionário para receber essa informação.",
-                "fontes": list(sources),
-                "docs_detalhes": initial_docs
-            }
-        elif top_audience == "Fornecedor":
-            return {
-                "resposta": "Você precisa ser um fornecedor para receber essa informação.",
-                "fontes": list(sources),
-                "docs_detalhes": initial_docs
-            }
+        for doc in initial_docs[:2]:
+            source = doc.metadata.get("source", "")
+            if "Regulamento Interno" in source:
+                return {
+                    "resposta": "Você precisa ser um funcionário para receber essa informação.",
+                    "fontes": list(sources),
+                    "docs_detalhes": initial_docs
+                }
+            if "Manual de Fornecedores" in source:
+                return {
+                    "resposta": "Você precisa ser um fornecedor para receber essa informação.",
+                    "fontes": list(sources),
+                    "docs_detalhes": initial_docs
+                }
     elif profile == "Fornecedor":
-        if top_audience == "Funcionário":
+        top_source = initial_docs[0].metadata.get("source", "") if initial_docs else ""
+        has_supplier_doc = any("Manual de Fornecedores" in d.metadata.get("source", "") for d in initial_docs)
+        # Só bloqueia fornecedor se o Regulamento Interno for a fonte principal E o Manual de Fornecedores não estiver envolvido
+        if "Regulamento Interno" in top_source and not has_supplier_doc:
             return {
                 "resposta": "Você precisa ser um funcionário para receber essa informação.",
                 "fontes": list(sources),
                 "docs_detalhes": initial_docs
             }
 
-    # 2. Configurar o retriever com filtro de metadados adequado ao perfil
+    # 2. Configurar o filtro de metadados baseado no perfil
     search_filter = None
     if profile == "Cliente":
         search_filter = {"audience": "Geral"}
