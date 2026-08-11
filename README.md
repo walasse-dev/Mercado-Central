@@ -1,6 +1,6 @@
 # 🛒 Assistente Virtual RAG — Mercado Central 24h
 
-Sistema inteligente de atendimento, suporte e consulta baseado em **RAG (Retrieval-Augmented Generation)** utilizando LangChain, ChromaDB, HuggingFace Embeddings, Groq (Llama 3.3 70B) e Streamlit.
+Sistema inteligente de atendimento, suporte e consulta baseado em **RAG (Retrieval-Augmented Generation)** utilizando LangChain, ChromaDB, HuggingFace Embeddings (`all-MiniLM-L6-v2`), Google Gemini (`gemini-3.5-flash-lite`) e Streamlit.
 
 ---
 
@@ -28,9 +28,9 @@ O **Assistente Virtual do Mercado Central 24h** foi desenvolvido para solucionar
 │  2. Fragmentação de Texto (RecursiveCharacterTextSplitter)  │
 │  3. Vetorização (all-MiniLM-L6-v2 via HuggingFace)          │
 │  4. Armazenamento Vetorial Local (ChromaDB)                 │
-│  5. Recuperação Híbrida & MMR (Maximal Marginal Relevance)  │
+│  5. Recuperação Híbrida & Filtragem por Metadados (Audience)│
 └──────────────────────────────┬──────────────────────────────┘
-                               │ (Chamada de Função RAG)
+                               │ (Chamada RAG com Gemini 3.5 Flash Lite)
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                     FRONTEND STREAMLIT                      │
@@ -95,12 +95,27 @@ Acesse o aplicativo no navegador em `http://localhost:8501`.
 
 ---
 
-## 🔒 6. Política de Segurança e Comportamento do Agente
+## 🚀 5. Deploy no Streamlit Community Cloud
 
-O assistente possui restrições rígidas em seu prompt de sistema para garantir qualidade e confiabilidade:
-* **Domínio Estrito:** Responde apenas com base nos documentos institucionais do Mercado Central 24h.
-* **Recusa de Conhecimento Geral:** Perguntas fora do escopo (ex: esportes, entretenimento, conhecimentos gerais) são estritamente rejeitadas, informando ao usuário que o assistente é dedicado exclusivamente ao suporte dos manuais da empresa.
-* **Profissionalismo:** Não utiliza placeholders genéricos (como `[Nome do Atendente]`) e não solicita dados sensíveis (como CPF ou número de cupom fiscal).
+Para colocar o aplicativo no ar acessível publicamente 24/7:
+
+1. Suba o código para um repositório no GitHub (mantenha a pasta `docs/` e `chroma_db/`).
+2. Acesse [share.streamlit.io](https://share.streamlit.io/) e faça login com sua conta do GitHub.
+3. Clique em **"New app"** e selecione seu repositório, branch (`main`) e arquivo principal (`app.py`).
+4. Em **Advanced settings -> Secrets**, adicione sua chave de API:
+   ```toml
+   GEMINI_API_KEY = "sua_chave_gemini_aqui"
+   ```
+5. Clique em **Deploy!**
+
+---
+
+## 🔒 6. Política de Segurança e Controle de Acesso por Perfil
+
+O assistente possui restrições rígidas em seu backend e prompt de sistema para garantir conformidade e segurança:
+* **Filtros de Perfil em Camada Dupla:** O recuperador aplica filtros de metadados (`audience`: *Geral*, *Funcionário*, *Fornecedor*) garantindo que Clientes não acessem normas internas de Funcionários ou Manuais de Fornecedores.
+* **Mensagens Padronizadas:** Tentativas de acesso não autorizado retornam mensagens específicas, como *"Você precisa ser um funcionário para receber essa informação."*
+* **Domínio Estrito:** Responde apenas com base nos documentos institucionais do Mercado Central 24h, rejeitando perguntas de conhecimento geral.
 * **Citação de Fontes:** Sempre exibe expansores detalhando quais manuais e trechos foram consultados para formular a resposta.
 
 ---
@@ -110,6 +125,7 @@ O assistente possui restrições rígidas em seu prompt de sistema para garantir
 ### Como Cliente:
 * *"Qual é o prazo e as condições para troca de produtos perecíveis?"*
 * *"Como funciona a política de reembolso em caso de desistência?"*
+* *(Tentativa de Acesso Restrito)* *"Quais são os procedimentos de segurança e abertura de caixa?"* $\rightarrow$ *Deve retornar a mensagem de restrição.*
 
 ### Como Funcionário:
 * *"Quais são os procedimentos de segurança e abertura de caixa?"*
@@ -117,7 +133,7 @@ O assistente possui restrições rígidas em seu prompt de sistema para garantir
 
 ### Como Fornecedor:
 * *"Quais são os prazos de pagamento estipulados para compras?"*
-* *"Quais os requisitos de rotulagem para entrega de mercadorias?"*
+* *"Quais os requisitos de recebimento e conferência cega?"*
 
 ---
 
@@ -126,7 +142,7 @@ O assistente possui restrições rígidas em seu prompt de sistema para garantir
 ```text
 Mercado-Central/
 ├── app.py                      # Interface Web Streamlit
-├── rag_backend.py              # Lógica RAG (LangChain, ChromaDB, Groq)
+├── rag_backend.py              # Lógica RAG (LangChain, ChromaDB, Gemini)
 ├── requirements.txt            # Dependências do Python
 ├── .env                        # Variáveis de ambiente (local)
 ├── .gitignore                  # Arquivos ignorados pelo Git
@@ -139,4 +155,4 @@ Mercado-Central/
 ```
 
 ---
-*Desenvolvido para o Mercado Central 24h.*
+*Desenvolvido para o Mercado Central 24h — Powered by Google Gemini 3.5 Flash Lite.*
