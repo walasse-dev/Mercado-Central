@@ -2,11 +2,12 @@ import os
 import shutil
 from pathlib import Path
 from dotenv import load_dotenv
-from groq import Groq
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
 load_dotenv()
 
@@ -115,35 +116,29 @@ Contexto Recuperado:
 {context_text}
 """
 
-    messages = [{"role": "system", "content": system_prompt}]
-    
-    # Add recent chat history if any (last 4 turns)
+    lc_messages = [SystemMessage(content=system_prompt)]
     for msg in chat_history[-6:]:
-        messages.append({"role": msg["role"], "content": msg["content"]})
-        
-    messages.append({"role": "user", "content": user_query})
+        if msg["role"] == "user":
+            lc_messages.append(HumanMessage(content=msg["content"]))
+        elif msg["role"] == "assistant":
+            lc_messages.append(AIMessage(content=msg["content"]))
+    lc_messages.append(HumanMessage(content=user_query))
     
-    groq_api_key = os.getenv("GROQ_API_KEY")
-    if not groq_api_key:
-        raise ValueError("GROQ_API_KEY não encontrada no arquivo .env ou variáveis de ambiente.")
+    gemini_api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    if not gemini_api_key:
+        raise ValueError("GEMINI_API_KEY ou GOOGLE_API_KEY não encontrada no arquivo .env ou variáveis de ambiente.")
         
-    client = Groq(api_key=groq_api_key)
-    
-    # Nota: caso atinja rate limit do Groq em testes repetidos, tratamos graciosamente
     try:
-        completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=messages,
+        llm = ChatGoogleGenerativeAI(
+            model="gemini-2.5-flash",
             temperature=0.3,
-            max_completion_tokens=2048,
-            top_p=1,
-            stream=False,
-            stop=None
+            google_api_key=gemini_api_key
         )
-        resposta = completion.choices[0].message.content
+        response = llm.invoke(lc_messages)
+        resposta = response.content
     except Exception as e:
         if "rate_limit" in str(e).lower() or "429" in str(e):
-            resposta = "O sistema atingiu temporariamente o limite de requisições da API da IA (Rate Limit). Por favor, aguarde alguns minutos e tente novamente."
+            resposta = "O sistema atingiu temporariamente o limite de requisições da API do Google Gemini. Por favor, aguarde alguns instantes e tente novamente."
         else:
             raise e
     

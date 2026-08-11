@@ -54,11 +54,11 @@ O **Assistente Virtual do Mercado Central 24h** foi desenvolvido para solucionar
 * `langchain`
 * `langchain-community`
 * `langchain-huggingface`
+* `langchain-google-genai`
 * `sentence-transformers`
 * `chromadb`
 * `pypdf`
 * `python-dotenv`
-* `groq`
 
 ---
 
@@ -82,9 +82,9 @@ pip install -r requirements.txt
 ```
 
 ### Passo 4: Configurar as Variáveis de Ambiente
-Crie um arquivo `.env` na raiz do projeto com a sua chave de API da Groq:
+Crie um arquivo `.env` na raiz do projeto com a sua chave de API do Google Gemini (`GEMINI_API_KEY` ou `GOOGLE_API_KEY`):
 ```env
-GROQ_API_KEY=sua_chave_groq_aqui
+GEMINI_API_KEY=sua_chave_gemini_aqui
 ```
 
 ### Passo 5: Executar a Aplicação Localmente
