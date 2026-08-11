@@ -60,38 +60,20 @@ def query_rag(user_query: str, chat_history: list = None, profile: str = "Client
         
     vectorstore = initialize_vectorstore()
     
-    # 1. Verificação inicial sem filtro (top 3 documentos)
-    initial_docs = vectorstore.similarity_search(user_query, k=3)
-    sources = set(doc.metadata.get("source", "Desconhecido") for doc in initial_docs)
-
-    # Regras de bloqueio estrito por perfil
+    # Validação direcionada para Clientes tentando acessar procedimentos estritamente internos
     if profile == "Cliente":
-        for doc in initial_docs[:2]:
-            source = doc.metadata.get("source", "")
-            if "Regulamento Interno" in source:
+        query_lower = user_query.lower()
+        internal_keywords = ["caixa", "sangria", "abertura de caixa", "segurança do caixa", "uniforme", "celular", "ponto eletrônico", "escala de trabalho"]
+        if any(kw in query_lower for kw in internal_keywords):
+            unfiltered_docs = vectorstore.similarity_search(user_query, k=1)
+            if unfiltered_docs and "Regulamento Interno" in unfiltered_docs[0].metadata.get("source", ""):
                 return {
                     "resposta": "Você precisa ser um funcionário para receber essa informação.",
-                    "fontes": list(sources),
-                    "docs_detalhes": initial_docs
+                    "fontes": [unfiltered_docs[0].metadata.get("source", "Desconhecido")],
+                    "docs_detalhes": unfiltered_docs
                 }
-            if "Manual de Fornecedores" in source:
-                return {
-                    "resposta": "Você precisa ser um fornecedor para receber essa informação.",
-                    "fontes": list(sources),
-                    "docs_detalhes": initial_docs
-                }
-    elif profile == "Fornecedor":
-        top_source = initial_docs[0].metadata.get("source", "") if initial_docs else ""
-        has_supplier_doc = any("Manual de Fornecedores" in d.metadata.get("source", "") for d in initial_docs)
-        # Só bloqueia fornecedor se o Regulamento Interno for a fonte principal E o Manual de Fornecedores não estiver envolvido
-        if "Regulamento Interno" in top_source and not has_supplier_doc:
-            return {
-                "resposta": "Você precisa ser um funcionário para receber essa informação.",
-                "fontes": list(sources),
-                "docs_detalhes": initial_docs
-            }
 
-    # 2. Configurar o filtro de metadados baseado no perfil
+    # Configurar o filtro de metadados baseado no perfil
     search_filter = None
     if profile == "Cliente":
         search_filter = {"audience": "Geral"}
@@ -147,17 +129,23 @@ Contexto Recuperado:
         
     client = Groq(api_key=groq_api_key)
     
-    completion = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=messages,
-        temperature=0.3,
-        max_completion_tokens=2048,
-        top_p=1,
-        stream=False,
-        stop=None
-    )
-    
-    resposta = completion.choices[0].message.content
+    # Nota: caso atinja rate limit do Groq em testes repetidos, tratamos graciosamente
+    try:
+        completion = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=messages,
+            temperature=0.3,
+            max_completion_tokens=2048,
+            top_p=1,
+            stream=False,
+            stop=None
+        )
+        resposta = completion.choices[0].message.content
+    except Exception as e:
+        if "rate_limit" in str(e).lower() or "429" in str(e):
+            resposta = "O sistema atingiu temporariamente o limite de requisições da API da IA (Rate Limit). Por favor, aguarde alguns minutos e tente novamente."
+        else:
+            raise e
     
     return {
         "resposta": resposta,
